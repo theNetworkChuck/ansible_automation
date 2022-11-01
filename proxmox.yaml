@@ -1,0 +1,68 @@
+- name: Proxmox stuff
+  hosts: all
+  vars:
+    name: ubuntu
+  tasks:
+    - set_fact:
+        yeppers: "ubuntu-{{ lookup('password', '/dev/null chars=ascii_lowercase,digits length=8') }}"
+    - proxmox_kvm:
+        api_user    : root@pam
+        api_password: PASSWORD
+        api_host    : 10.70.7.73
+        clone       : ubuntutemplate   # The VM source
+        name        : "{{ yeppers }}"  # The target VM name
+        node        : proxmox
+        storage     : local-lvm
+        format      : qcow2
+        timeout     : 500  # Note: The task can take a while. Adapt
+    - name: start vm
+      proxmox_kvm:
+        api_user: root@pam
+        api_password: PASSWORD
+        api_host: 10.70.7.73
+        name: "{{ yeppers }}"
+        node: proxmox
+        state: started
+    - name: firststuff
+      shell: qm list | grep "{{ yeppers }}" | awk '{ print $1 }'
+      register: thevmid
+    - name: debug
+      debug:
+        var: thevmid.stdout 
+    
+    - name: getstuff
+      shell: qm config "{{ thevmid.stdout }}" | grep ^net0 | awk -F, '{print $1}' | awk -F= '{print $2}'
+      register: stuff
+    - name: debug
+      debug:
+        var: stuff.stdout
+    - name: Pause for 5 minute to build app cache
+      ansible.builtin.pause:
+        minutes: 1
+    - name: getarp
+      shell: nmap -sT 10.70.7.0/24
+      register: nmap
+    - debug:
+        var: nmap 
+    - name: getip
+      shell: arp | grep "{{ stuff.stdout|lower | regex_replace('^\\/|\\/$', '') }}" | awk '{ print $1 }'
+      register: theip
+    - debug:
+        var: theip
+    - name: Slack Notification
+      community.general.slack:
+        token: TOKEN
+        msg: |
+          ### Your Server is READY!! ###
+          --------------------------------------
+          ``
+          `Server`: "{{ yeppers }}"
+          `IP ADDRESS`: "{{ theip.stdout}}"
+          'URL': ssh://networkchuck@{{ theip.stdout }}
+          --------------------------------------
+        channel: '#ansible'
+        color: good
+        username: 'Ansible on {{ inventory_hostname }}'
+        link_names: 0
+        parse: 'none'
+      ignore_errors: true
