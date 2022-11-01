@@ -1,0 +1,63 @@
+--- 
+- 
+  hosts: localhost
+  name: "Create Windows Server"
+  tasks:
+    - set_fact:
+        yeppers: "ansible-windows-{{ lookup('password', '/dev/null chars=ascii_lowercase,digits length=8') }}"
+    - 
+      amazon.aws.ec2_instance: 
+        aws_access_key: KEY
+        aws_secret_key: KEY
+        image_id: ami-03aeb14d816dc98ed
+        instance_type: t2.medium
+        key_name: NetworkChuck-Admin
+        name: "{{ yeppers }}"
+        network: 
+          assign_public_ip: true
+        region: us-east-1
+        security_group: 
+        vpc_subnet_id: 
+      name: "start an instance with a public IP address"
+    - 
+      ansible.builtin.pause: 
+        minutes: 1
+      name: "Pause for 1 minute to allow for instance creation"        
+    - 
+      amazon.aws.ec2_instance_info: 
+        aws_access_key: 
+        aws_secret_key: 
+        filters: 
+          instance-state-name: 
+            - running
+          ? "tag:Name"
+          : "{{ yeppers }}"
+        region: us-east-1
+      name: "Grab instance info"
+      register: instance_info
+    - name: Set ip variable
+      set_fact:
+        pub_ip: "{{ instance_info | community.general.json_query('instances[].network_interfaces[].association.public_ip[] | [0]') }}"
+    - name: print variable
+      ansible.builtin.debug:
+        var: pub_ip      
+    - name: Slack Notification
+      community.general.slack:
+        token: 
+        msg: |
+          ### Your AWS Server is READY!! ###
+          --------------------------------------
+          ``
+          `Server`: "{{ yeppers }}"
+          `IP ADDRESS`: "{{ pub_ip }}"
+          --------------------------------------
+        channel: '#ansible'
+        color: good
+        username: 'Ansible on {{ inventory_hostname }}'
+        link_names: 0
+        parse: 'none'
+      ignore_errors: true
+
+
+        
+   
