@@ -1,0 +1,38 @@
+- name: Create Linode Instance
+  hosts: localhost
+  tasks:
+    - set_fact:
+        yeppers: "ansible-ubuntu-{{ lookup('password', '/dev/null chars=ascii_lowercase,digits length=16') }}"
+    - set_fact:
+        password: "{{ lookup('password', '/dev/null chars=ascii_lowercase,digits length=8') }}"   
+    - name: Create a Linode instance
+      linode.cloud.instance:
+        api_token: TOKEN
+        label: "{{ yeppers }}"
+        type: g6-nanode-1
+        region: us-central
+        image: linode/ubuntu22.04
+        root_pass: "{{ password }}"
+        state: present
+      register: instance_info  
+    - name: Set ip variable
+      set_fact:
+        pub_ip: "{{ instance_info | community.general.json_query('instance.ipv4[] | [0]') }}"        
+    - name: Slack Notification
+      community.general.slack:
+        token: TOKEN
+        msg: |
+          ### Your Linode Server is READY!! ###
+          --------------------------------------
+          ``
+          `Server`: "{{ yeppers }}"
+          `IP ADDRESS`: "{{ pub_ip }}"
+          `Password`: "{{ password }}"
+          --------------------------------------
+        channel: '#ansible'
+        color: good
+        username: 'Ansible on {{ inventory_hostname }}'
+        link_names: 0
+        parse: 'none'
+      ignore_errors: true
+        
