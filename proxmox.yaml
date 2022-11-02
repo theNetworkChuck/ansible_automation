@@ -39,13 +39,8 @@
     - name: Pause for 5 minute to build app cache
       ansible.builtin.pause:
         minutes: 1
-    - name: getarp
-      shell: nmap -sT 10.70.7.0/24
-      register: nmap
-    - debug:
-        var: nmap 
     - name: getip
-      shell: arp | grep "{{ stuff.stdout|lower | regex_replace('^\\/|\\/$', '') }}" | awk '{ print $1 }'
+      shell: arping "{{ stuff.stdout }}" -c 1 -i vmbr0
       register: theip
     - debug:
         var: theip
